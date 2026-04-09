@@ -6,6 +6,7 @@ gemini_ocr.py
 import io
 import os
 import json
+import time
 from dataclasses import dataclass, asdict
 
 from google import genai
@@ -96,17 +97,28 @@ def extract_from_image(image: Image.Image) -> BusinessCard:
     image_bytes = buf.getvalue()
 
     client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=[
-            _PROMPT,
-            types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
-        ],
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            temperature=0.0,
-        ),
-    )
+
+    last_error = None
+    for attempt in range(3):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=[
+                    _PROMPT,
+                    types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
+                ],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.0,
+                ),
+            )
+            break
+        except Exception as e:
+            last_error = e
+            if attempt < 2:
+                time.sleep(3)
+    else:
+        raise last_error
 
     raw = response.text.strip()
 
