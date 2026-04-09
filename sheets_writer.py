@@ -89,10 +89,10 @@ def _get_or_create_sheet(client: gspread.Client) -> gspread.Worksheet:
     except gspread.WorksheetNotFound:
         worksheet = spreadsheet.add_worksheet(title=sheet_name, rows=1000, cols=len(HEADERS))
 
-    # ヘッダーが未設定の場合は書き込む
+    # ヘッダーが古い or 未設定の場合は上書き更新
     existing = worksheet.row_values(1)
-    if not existing or existing[0] != HEADERS[0]:
-        worksheet.insert_row(HEADERS, index=1)
+    if existing != HEADERS:
+        worksheet.update(range_name="A1", values=[HEADERS])
 
     return worksheet
 
