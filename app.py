@@ -7,6 +7,7 @@ app.py
 """
 
 import io
+import time
 from typing import Optional
 from PIL import Image
 import streamlit as st
@@ -258,29 +259,11 @@ with tab_manual:
 # --------------------------------------------------------------------------- #
 
 if st.session_state.submitted:
-    card = st.session_state.get("last_card")
-    row_num = st.session_state.get("last_row", "?")
-
-    st.success(f"✅ 登録完了！（{row_num}行目に追記しました）")
-
-    if card:
-        st.markdown("#### 登録した内容")
-        st.table(
-            {
-                "項目": ["企業名", "氏名", "役職", "メールアドレス", "部署", "電話番号"],
-                "内容": [
-                    card.company_name,
-                    card.full_name,
-                    card.title,
-                    card.email,
-                    card.department,
-                    card.phone,
-                ],
-            }
-        )
-
-    if st.button("📇 続けて登録する", use_container_width=True):
-        st.session_state.card = None
-        st.session_state.ocr_done = False
-        st.session_state.submitted = False
-        st.rerun()
+    st.success("✅ 登録が完了しました。次の読み取りに移ります...")
+    time.sleep(2)
+    st.session_state.card = None
+    st.session_state.ocr_done = False
+    st.session_state.submitted = False
+    st.session_state.last_photo_id = None
+    st.session_state.last_upload_id = None
+    st.rerun()
