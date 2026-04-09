@@ -108,6 +108,13 @@ def extract_from_image(image: Image.Image) -> BusinessCard:
             )
             break
         except Exception as e:
+            error_str = str(e)
+            # 日次クォータ超過はリトライ不可
+            if "PerDay" in error_str or "per_day" in error_str.lower():
+                raise ValueError(
+                    "本日のAPI使用上限（無料枠20回/日）に達しました。\n"
+                    "Google Cloud コンソールで課金を有効にすると上限が解除されます。"
+                ) from e
             last_error = e
             if attempt < 2:
                 time.sleep(3)
