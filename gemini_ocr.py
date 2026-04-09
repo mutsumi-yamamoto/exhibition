@@ -89,7 +89,7 @@ def extract_from_image(image: Image.Image) -> BusinessCard:
         raise ValueError("GEMINI_API_KEY が設定されていません（.streamlit/secrets.toml または .env を確認してください）。")
 
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    model = genai.GenerativeModel("gemini-1.5-flash-8b")
 
     response = model.generate_content(
         [_PROMPT, image],
