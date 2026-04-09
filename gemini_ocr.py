@@ -3,11 +3,13 @@ gemini_ocr.py
 名刺画像をGemini Vision APIに送り、構造化データとして抽出するモジュール。
 """
 
+import io
 import os
 import json
 from dataclasses import dataclass, asdict
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from PIL import Image
 from dotenv import load_dotenv
 
@@ -88,12 +90,19 @@ def extract_from_image(image: Image.Image) -> BusinessCard:
     if not api_key:
         raise ValueError("GEMINI_API_KEY が設定されていません（.streamlit/secrets.toml または .env を確認してください）。")
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash-8b")
+    # PIL Image → JPEG bytes に変換
+    buf = io.BytesIO()
+    image.save(buf, format="JPEG")
+    image_bytes = buf.getvalue()
 
-    response = model.generate_content(
-        [_PROMPT, image],
-        generation_config=genai.GenerationConfig(
+    client = genai.Client(api_key=api_key)
+    response = client.models.generate_content(
+        model="gemini-1.5-flash",
+        contents=[
+            _PROMPT,
+            types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
+        ],
+        config=types.GenerateContentConfig(
             response_mime_type="application/json",
             temperature=0.0,
         ),
