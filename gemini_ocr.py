@@ -97,7 +97,7 @@ def extract_from_image(image: Image.Image) -> BusinessCard:
 
     client = genai.Client(api_key=api_key)
     response = client.models.generate_content(
-        model="gemini-2.0-flash-lite",
+        model="gemini-2.5-flash",
         contents=[
             _PROMPT,
             types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
