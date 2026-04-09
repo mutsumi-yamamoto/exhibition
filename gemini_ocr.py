@@ -24,13 +24,11 @@ load_dotenv()
 class BusinessCard:
     """名刺から抽出する項目"""
     company_name: str = ""       # 企業名
-    department: str = ""         # 部署名
-    title: str = ""              # 役職
     full_name: str = ""          # 氏名
+    title: str = ""              # 役職
     email: str = ""              # メールアドレス
+    department: str = ""         # 部署
     phone: str = ""              # 電話番号
-    address: str = ""            # 住所
-    website: str = ""            # ウェブサイト
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -46,24 +44,20 @@ _PROMPT = """
 
 抽出するフィールド:
 - company_name: 企業名（法人格含む。例: 株式会社〇〇）
-- department: 部署名（なければ空文字）
-- title: 役職名（例: 代表取締役、営業部長）
 - full_name: 氏名（フルネーム）
+- title: 役職名（例: 代表取締役、営業部長）
 - email: メールアドレス
+- department: 部署名（なければ空文字）
 - phone: 電話番号（最初の1件）
-- address: 住所（なければ空文字）
-- website: ウェブサイトURL（なければ空文字）
 
 出力例:
 {
   "company_name": "株式会社サンプル",
-  "department": "営業部",
-  "title": "部長",
   "full_name": "山田 太郎",
+  "title": "部長",
   "email": "yamada@sample.co.jp",
-  "phone": "03-1234-5678",
-  "address": "東京都渋谷区〇〇1-2-3",
-  "website": "https://www.sample.co.jp"
+  "department": "営業部",
+  "phone": "03-1234-5678"
 }
 
 読み取れない項目は空文字にしてください。JSONのみ返してください。
@@ -136,11 +130,9 @@ def extract_from_image(image: Image.Image) -> BusinessCard:
 
     return BusinessCard(
         company_name=data.get("company_name", ""),
-        department=data.get("department", ""),
-        title=data.get("title", ""),
         full_name=data.get("full_name", ""),
+        title=data.get("title", ""),
         email=data.get("email", ""),
+        department=data.get("department", ""),
         phone=data.get("phone", ""),
-        address=data.get("address", ""),
-        website=data.get("website", ""),
     )

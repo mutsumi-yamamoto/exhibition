@@ -22,21 +22,24 @@ _SCOPES = [
 
 # スプレッドシートのヘッダー定義（列順）
 HEADERS = [
-    "企業名",
-    "部署名",
-    "役職",
-    "氏名",
-    "メールアドレス",
-    "電話番号",
-    "住所",
-    "ウェブサイト",
-    "取得元",
-    "取得日時",
-    "企業規模",    # GASが後で記入
-    "ランク",      # GASが後で記入
-    "担当営業名",  # 人間が記入
-    "担当営業メール", # 人間が記入
-    "下書き生成済み", # GASが後で記入
+    "企業名",               # A: Form/OCR
+    "氏名",                 # B: Form/OCR
+    "役職",                 # C: Form/OCR
+    "メールアドレス",       # D: Form/OCR
+    "部署",                 # E: Form/OCR
+    "電話番号",             # F: Form/OCR
+    "関心事項",             # G: Formのみ
+    "取得元",               # H: Form/OCR
+    "登録日時",             # I: 自動
+    "企業規模（売上高）",   # J: GAS自動
+    "企業規模（従業員数）", # K: GAS自動
+    "EDINETコード",         # L: GAS自動
+    "ランク",               # M: GAS自動
+    "ランク判定日時",       # N: GAS自動
+    "自社担当者名",         # O: 手入力
+    "自社担当者メール",     # P: 手入力
+    "下書き作成済",         # Q: GAS自動
+    "下書き作成日時",       # R: GAS自動
 ]
 
 
@@ -111,21 +114,24 @@ def append_business_card(card: BusinessCard, source: str = "名刺") -> int:
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     row = [
-        card.company_name,
-        card.department,
-        card.title,
-        card.full_name,
-        card.email,
-        card.phone,
-        card.address,
-        card.website,
-        source,
-        now,
-        "",   # 企業規模（GAS記入）
-        "",   # ランク（GAS記入）
-        "",   # 担当営業名（人間記入）
-        "",   # 担当営業メール（人間記入）
-        "FALSE",  # 下書き生成済み
+        card.company_name,  # A: 企業名
+        card.full_name,     # B: 氏名
+        card.title,         # C: 役職
+        card.email,         # D: メールアドレス
+        card.department,    # E: 部署
+        card.phone,         # F: 電話番号
+        "",                 # G: 関心事項（Formのみ）
+        source,             # H: 取得元
+        now,                # I: 登録日時
+        "",                 # J: 企業規模（売上高）GAS
+        "",                 # K: 企業規模（従業員数）GAS
+        "",                 # L: EDINETコード GAS
+        "",                 # M: ランク GAS
+        "",                 # N: ランク判定日時 GAS
+        "",                 # O: 自社担当者名 手入力
+        "",                 # P: 自社担当者メール 手入力
+        "FALSE",            # Q: 下書き作成済 GAS
+        "",                 # R: 下書き作成日時 GAS
     ]
 
     worksheet.append_row(row, value_input_option="USER_ENTERED")

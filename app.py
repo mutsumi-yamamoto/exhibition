@@ -118,16 +118,14 @@ if st.session_state.ocr_done and st.session_state.card is not None and not st.se
         col1, col2 = st.columns(2)
 
         with col1:
-            company_name = st.text_input("企業名 *", value=card.company_name)
-            department   = st.text_input("部署名",   value=card.department)
-            title        = st.text_input("役職 *",   value=card.title)
-            full_name    = st.text_input("氏名 *",   value=card.full_name)
+            company_name = st.text_input("企業名 *",         value=card.company_name)
+            full_name    = st.text_input("氏名 *",           value=card.full_name)
+            title        = st.text_input("役職 *",           value=card.title)
 
         with col2:
             email        = st.text_input("メールアドレス *", value=card.email)
+            department   = st.text_input("部署",             value=card.department)
             phone        = st.text_input("電話番号",         value=card.phone)
-            address      = st.text_input("住所",             value=card.address)
-            website      = st.text_input("ウェブサイト",     value=card.website)
 
         # 重複チェック表示
         if card.email:
@@ -163,13 +161,11 @@ if st.session_state.ocr_done and st.session_state.card is not None and not st.se
                     full_name=full_name.strip(),
                     email=email.strip(),
                     phone=phone.strip(),
-                    address=address.strip(),
-                    website=website.strip(),
                 )
 
                 with st.spinner("Google Sheetsに書き込み中..."):
                     try:
-                        row_num = append_business_card(confirmed_card, source="名刺")
+                        row_num = append_business_card(confirmed_card, source="名刺OCR")
                         st.session_state.submitted = True
                         st.session_state.last_row = row_num
                         st.session_state.last_card = confirmed_card
@@ -195,16 +191,14 @@ if st.session_state.submitted:
         st.markdown("#### 登録した内容")
         st.table(
             {
-                "項目": ["企業名", "部署名", "役職", "氏名", "メール", "電話", "住所", "ウェブサイト"],
+                "項目": ["企業名", "氏名", "役職", "メールアドレス", "部署", "電話番号"],
                 "内容": [
                     card.company_name,
-                    card.department,
-                    card.title,
                     card.full_name,
+                    card.title,
                     card.email,
+                    card.department,
                     card.phone,
-                    card.address,
-                    card.website,
                 ],
             }
         )
