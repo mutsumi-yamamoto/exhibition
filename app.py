@@ -43,6 +43,8 @@ if "last_upload_id" not in st.session_state:
     st.session_state.last_upload_id = None
 if "dup_cache" not in st.session_state:
     st.session_state.dup_cache: dict = {}
+if "form_key" not in st.session_state:
+    st.session_state.form_key = 0
 
 
 def _check_duplicate_cached(email: str) -> bool:
@@ -53,6 +55,10 @@ def _check_duplicate_cached(email: str) -> bool:
         except Exception:
             return False
     return st.session_state.dup_cache[email]
+
+
+# フォームのキー（登録完了後にインクリメントしてフィールドをリセット）
+fk = st.session_state.form_key
 
 # --------------------------------------------------------------------------- #
 # メインタブ
@@ -79,7 +85,7 @@ with tab_ocr:
     new_image = False
 
     with cam_tab:
-        camera_photo = st.camera_input("名刺をカメラで撮影してください")
+        camera_photo = st.camera_input("名刺をカメラで撮影してください", key=f"camera_{fk}")
         if camera_photo is not None:
             image = Image.open(camera_photo)
             image_caption = "撮影した名刺"
@@ -93,6 +99,7 @@ with tab_ocr:
             "名刺の画像ファイルを選択してください（JPG / PNG / WEBP）",
             type=["jpg", "jpeg", "png", "webp"],
             help="鮮明に撮影された名刺画像ほど精度が上がります。",
+            key=f"uploader_{fk}",
         )
         if uploaded_file is not None:
             image = Image.open(io.BytesIO(uploaded_file.read()))
@@ -138,7 +145,7 @@ with tab_ocr:
         st.markdown("### Step 3 — 内容を確認・修正")
         st.caption("OCR結果を確認し、誤りがあれば修正してから登録してください。")
 
-        with st.form("ocr_confirm_form"):
+        with st.form(f"ocr_confirm_form_{fk}"):
             col1, col2 = st.columns(2)
 
             with col1:
@@ -187,8 +194,6 @@ with tab_ocr:
                         try:
                             row_num = append_business_card(confirmed_card, source="名刺OCR")
                             st.session_state.submitted = True
-                            st.session_state.last_row = row_num
-                            st.session_state.last_card = confirmed_card
                             st.rerun()
                         except FileNotFoundError as e:
                             st.error(f"認証エラー: {e}")
@@ -206,23 +211,22 @@ with tab_manual:
     st.markdown("### 情報を手動で入力")
     st.caption("名刺がない場合や、直接入力したい場合にご利用ください。")
 
-    with st.form("manual_form"):
+    with st.form(f"manual_form_{fk}"):
         col1, col2 = st.columns(2)
 
         with col1:
-            m_company_name = st.text_input("企業名 *")
-            m_full_name    = st.text_input("氏名 *")
-            m_title        = st.text_input("役職 *")
+            m_company_name = st.text_input("企業名 *",         key=f"m_company_{fk}")
+            m_full_name    = st.text_input("氏名 *",           key=f"m_fullname_{fk}")
+            m_title        = st.text_input("役職 *",           key=f"m_title_{fk}")
 
         with col2:
-            m_email        = st.text_input("メールアドレス *")
-            m_department   = st.text_input("部署")
-            m_phone        = st.text_input("電話番号")
+            m_email        = st.text_input("メールアドレス *", key=f"m_email_{fk}")
+            m_department   = st.text_input("部署",             key=f"m_dept_{fk}")
+            m_phone        = st.text_input("電話番号",         key=f"m_phone_{fk}")
 
         submitted_manual = st.form_submit_button("✅ Google Sheetsに登録する", type="primary", use_container_width=True)
 
         if submitted_manual:
-            # 重複チェック
             if m_email.strip():
                 try:
                     if _check_duplicate_cached(m_email.strip()):
@@ -256,8 +260,6 @@ with tab_manual:
                     try:
                         row_num = append_business_card(manual_card, source="手動入力")
                         st.session_state.submitted = True
-                        st.session_state.last_row = row_num
-                        st.session_state.last_card = manual_card
                         st.rerun()
                     except FileNotFoundError as e:
                         st.error(f"認証エラー: {e}")
@@ -279,4 +281,5 @@ if st.session_state.submitted:
     st.session_state.last_photo_id = None
     st.session_state.last_upload_id = None
     st.session_state.dup_cache = {}
+    st.session_state.form_key += 1  # フォームキーを更新してフィールドをリセット
     st.rerun()
