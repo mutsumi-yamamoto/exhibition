@@ -27,13 +27,18 @@ st.set_page_config(
 
 st.title("📇 クライアント登録システム")
 
-# カメラプレビューを大きく表示
+# カメラプレビューを縦長・横幅いっぱいに表示
 st.markdown("""
 <style>
+[data-testid="stCameraInput"] {
+    width: 100% !important;
+}
 [data-testid="stCameraInput"] video {
     width: 100% !important;
-    height: 65vh !important;
+    height: auto !important;
+    aspect-ratio: 3 / 4 !important;
     object-fit: cover !important;
+    border-radius: 8px;
 }
 </style>
 """, unsafe_allow_html=True)
