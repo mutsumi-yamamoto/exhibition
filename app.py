@@ -27,23 +27,6 @@ st.set_page_config(
 
 st.title("📇 クライアント登録システム")
 
-# カメラプレビューを縦長・横幅いっぱいに表示
-st.markdown("""
-<style>
-[data-testid="stCameraInput"] {
-    width: 100% !important;
-}
-[data-testid="stCameraInput"] video {
-    width: 100% !important;
-    height: unset !important;
-    max-height: unset !important;
-    min-height: unset !important;
-    aspect-ratio: 9 / 16 !important;
-    object-fit: cover !important;
-    border-radius: 8px;
-}
-</style>
-""", unsafe_allow_html=True)
 
 # --------------------------------------------------------------------------- #
 # セッション状態の初期化
@@ -103,7 +86,6 @@ with tab_ocr:
     new_image = False
 
     with cam_tab:
-        st.caption("📷 外カメラを使う場合は、カメラ画面内の切替ボタン（↺）をタップしてください。")
         camera_photo = st.camera_input("名刺をカメラで撮影してください", key=f"camera_{fk}")
         if camera_photo is not None:
             image = Image.open(camera_photo)
@@ -114,6 +96,7 @@ with tab_ocr:
                 new_image = True
 
     with upload_tab:
+        st.caption("スマホでは「写真を撮る」を選ぶと全画面カメラで撮影できます。")
         uploaded_file = st.file_uploader(
             "名刺の画像ファイルを選択してください（JPG / PNG / WEBP）",
             type=["jpg", "jpeg", "png", "webp"],
