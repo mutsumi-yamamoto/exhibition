@@ -35,7 +35,9 @@ st.markdown("""
 }
 [data-testid="stCameraInput"] video {
     width: 100% !important;
-    height: auto !important;
+    height: unset !important;
+    max-height: unset !important;
+    min-height: unset !important;
     aspect-ratio: 9 / 16 !important;
     object-fit: cover !important;
     border-radius: 8px;
