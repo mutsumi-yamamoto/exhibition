@@ -86,6 +86,7 @@ with tab_ocr:
     new_image = False
 
     with cam_tab:
+        st.caption("外カメラを使う場合は、カメラ画面内の切替ボタン（↺）をタップしてください。")
         camera_photo = st.camera_input("名刺をカメラで撮影してください", key=f"camera_{fk}")
         if camera_photo is not None:
             image = Image.open(camera_photo)
