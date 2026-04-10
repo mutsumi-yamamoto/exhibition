@@ -85,7 +85,7 @@ with tab_ocr:
     new_image = False
 
     with cam_tab:
-        camera_photo = st.camera_input("名刺をカメラで撮影してください", key=f"camera_{fk}")
+        camera_photo = st.camera_input("名刺をカメラで撮影してください", key=f"camera_{fk}", facing_mode="environment")
         if camera_photo is not None:
             image = Image.open(camera_photo)
             image_caption = "撮影した名刺"
