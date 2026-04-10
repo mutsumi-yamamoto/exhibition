@@ -27,36 +27,13 @@ st.set_page_config(
 
 st.title("📇 クライアント登録システム")
 
-# カメラプレビュー中のみ全画面表示
+# カメラプレビューを大きく表示
 st.markdown("""
 <style>
-[data-testid="stCameraInput"]:has(video) {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100vw !important;
-    height: 100dvh !important;
-    z-index: 9999 !important;
-    background: #000 !important;
-    padding: 0 !important;
-    margin: 0 !important;
-}
-[data-testid="stCameraInput"]:has(video) video {
-    width: 100vw !important;
-    height: calc(100dvh - 90px) !important;
+[data-testid="stCameraInput"] video {
+    width: 100% !important;
+    height: 65vh !important;
     object-fit: cover !important;
-    display: block !important;
-}
-[data-testid="stCameraInput"]:has(video) button {
-    position: fixed !important;
-    bottom: 16px !important;
-    left: 50% !important;
-    transform: translateX(-50%) !important;
-    z-index: 10000 !important;
-    width: 72px !important;
-    height: 72px !important;
-    border-radius: 50% !important;
-    font-size: 28px !important;
 }
 </style>
 """, unsafe_allow_html=True)
