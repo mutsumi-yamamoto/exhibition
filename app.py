@@ -41,6 +41,18 @@ if "last_photo_id" not in st.session_state:
     st.session_state.last_photo_id = None
 if "last_upload_id" not in st.session_state:
     st.session_state.last_upload_id = None
+if "dup_cache" not in st.session_state:
+    st.session_state.dup_cache: dict = {}
+
+
+def _check_duplicate_cached(email: str) -> bool:
+    """重複チェック結果をセッション内でキャッシュし、API呼び出しを最小化する。"""
+    if email not in st.session_state.dup_cache:
+        try:
+            st.session_state.dup_cache[email] = check_duplicate(email)
+        except Exception:
+            return False
+    return st.session_state.dup_cache[email]
 
 # --------------------------------------------------------------------------- #
 # メインタブ
@@ -141,7 +153,7 @@ with tab_ocr:
 
             if card.email:
                 try:
-                    if check_duplicate(card.email):
+                    if _check_duplicate_cached(card.email):
                         st.warning(
                             f"⚠️ このメールアドレス（{card.email}）は既に登録されています。"
                             "重複登録に注意してください。"
@@ -213,7 +225,7 @@ with tab_manual:
             # 重複チェック
             if m_email.strip():
                 try:
-                    if check_duplicate(m_email.strip()):
+                    if _check_duplicate_cached(m_email.strip()):
                         st.warning(
                             f"⚠️ このメールアドレス（{m_email.strip()}）は既に登録されています。"
                             "重複登録に注意してください。"
@@ -266,4 +278,5 @@ if st.session_state.submitted:
     st.session_state.submitted = False
     st.session_state.last_photo_id = None
     st.session_state.last_upload_id = None
+    st.session_state.dup_cache = {}
     st.rerun()

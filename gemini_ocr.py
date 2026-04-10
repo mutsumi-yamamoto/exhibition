@@ -85,9 +85,13 @@ def extract_from_image(image: Image.Image) -> BusinessCard:
     if not api_key:
         raise ValueError("GEMINI_API_KEY が設定されていません（.streamlit/secrets.toml または .env を確認してください）。")
 
-    # PIL Image → JPEG bytes に変換
+    # PIL Image → リサイズ → JPEG bytes に変換（長辺1024px以下に縮小）
+    w, h = image.size
+    if max(w, h) > 1024:
+        ratio = 1024 / max(w, h)
+        image = image.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
     buf = io.BytesIO()
-    image.save(buf, format="JPEG")
+    image.save(buf, format="JPEG", quality=85)
     image_bytes = buf.getvalue()
 
     client = genai.Client(api_key=api_key)

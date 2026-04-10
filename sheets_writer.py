@@ -7,6 +7,7 @@ import os
 from datetime import datetime
 
 import gspread
+import streamlit as st
 from google.oauth2.service_account import Credentials
 from dotenv import load_dotenv
 
@@ -43,15 +44,15 @@ HEADERS = [
 ]
 
 
+@st.cache_resource
 def _get_client() -> gspread.Client:
-    """サービスアカウントで認証し gspread クライアントを返す。
+    """サービスアカウントで認証し gspread クライアントを返す（接続をキャッシュ）。
 
     優先順位:
     1. st.secrets["gcp_service_account"]（Streamlit Community Cloud / ローカルの secrets.toml）
     2. SERVICE_ACCOUNT_JSON 環境変数で指定したJSONファイル（ローカル開発）
     """
     try:
-        import streamlit as st
         if "gcp_service_account" in st.secrets:
             creds = Credentials.from_service_account_info(
                 dict(st.secrets["gcp_service_account"]), scopes=_SCOPES
@@ -75,26 +76,21 @@ def _get_client() -> gspread.Client:
 def _get_or_create_sheet(client: gspread.Client) -> gspread.Worksheet:
     """
     スプレッドシートを開き、対象シートを返す。
-    シートが存在しない場合は作成してヘッダーを書き込む。
+    シートが存在しない場合のみ作成してヘッダーを書き込む。
     """
     spreadsheet_id = os.getenv("SPREADSHEET_ID")
     if not spreadsheet_id:
-        raise ValueError("SPREADSHEET_ID が .env に設定されていません。")
+        raise ValueError("SPREADSHEET_ID が設定されていません。")
 
     sheet_name = os.getenv("SHEET_NAME", "マスター")
     spreadsheet = client.open_by_key(spreadsheet_id)
 
     try:
-        worksheet = spreadsheet.worksheet(sheet_name)
+        return spreadsheet.worksheet(sheet_name)
     except gspread.WorksheetNotFound:
         worksheet = spreadsheet.add_worksheet(title=sheet_name, rows=1000, cols=len(HEADERS))
-
-    # ヘッダーが古い or 未設定の場合は上書き更新
-    existing = worksheet.row_values(1)
-    if existing != HEADERS:
         worksheet.update(range_name="A1", values=[HEADERS])
-
-    return worksheet
+        return worksheet
 
 
 def append_business_card(card: BusinessCard, source: str = "名刺") -> int:
