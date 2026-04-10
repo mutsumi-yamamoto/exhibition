@@ -138,7 +138,8 @@ def upload_to_drive(image_bytes: bytes, filename: str) -> str:
         io.BytesIO(image_bytes), mimetype="image/jpeg", resumable=False
     )
     uploaded = service.files().create(
-        body=file_metadata, media_body=media, fields="id"
+        body=file_metadata, media_body=media, fields="id",
+        supportsAllDrives=True
     ).execute()
 
     file_id = uploaded["id"]
@@ -147,6 +148,7 @@ def upload_to_drive(image_bytes: bytes, filename: str) -> str:
     service.permissions().create(
         fileId=file_id,
         body={"type": "anyone", "role": "reader"},
+        supportsAllDrives=True
     ).execute()
 
     return f"https://drive.google.com/file/d/{file_id}/view"
