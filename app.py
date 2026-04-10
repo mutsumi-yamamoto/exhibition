@@ -13,7 +13,7 @@ from PIL import Image
 import streamlit as st
 
 from gemini_ocr import extract_from_image, BusinessCard
-from sheets_writer import append_business_card, check_duplicate
+from sheets_writer import append_business_card, check_duplicate, upload_to_drive
 
 # --------------------------------------------------------------------------- #
 # ページ設定
@@ -46,6 +46,8 @@ if "dup_cache" not in st.session_state:
     st.session_state.dup_cache: dict = {}
 if "form_key" not in st.session_state:
     st.session_state.form_key = 0
+if "image_bytes" not in st.session_state:
+    st.session_state.image_bytes: Optional[bytes] = None
 
 
 def _check_duplicate_cached(email: str) -> bool:
@@ -95,6 +97,9 @@ with tab_ocr:
                 st.session_state.last_photo_id = id(camera_photo)
                 st.session_state.last_upload_id = None
                 new_image = True
+                # Drive アップロード用にバイト列を保存
+                camera_photo.seek(0)
+                st.session_state.image_bytes = camera_photo.read()
 
     with upload_tab:
         st.caption("スマホでは「写真を撮る」を選ぶと全画面カメラで撮影できます。")
@@ -105,13 +110,16 @@ with tab_ocr:
             key=f"uploader_{fk}",
         )
         if uploaded_file is not None:
-            image = Image.open(io.BytesIO(uploaded_file.read()))
+            raw_bytes = uploaded_file.read()
+            image = Image.open(io.BytesIO(raw_bytes))
             image_caption = uploaded_file.name
             upload_key = f"{uploaded_file.name}_{uploaded_file.size}"
             if st.session_state.last_upload_id != upload_key:
                 st.session_state.last_upload_id = upload_key
                 st.session_state.last_photo_id = None
                 new_image = True
+                # Drive アップロード用にバイト列を保存
+                st.session_state.image_bytes = raw_bytes
 
     if image is not None:
         col_img, col_info = st.columns([1, 1])
@@ -193,9 +201,19 @@ with tab_ocr:
                         email=email.strip(),
                         phone=phone.strip(),
                     )
+                    with st.spinner("Google Drive に画像をアップロード中..."):
+                        image_url = ""
+                        if st.session_state.image_bytes:
+                            try:
+                                fname = f"{full_name.strip()}_{company_name.strip()}.jpg"
+                                image_url = upload_to_drive(st.session_state.image_bytes, fname)
+                            except Exception as e:
+                                st.warning(f"画像アップロードをスキップしました: {e}")
                     with st.spinner("Google Sheetsに書き込み中..."):
                         try:
-                            row_num = append_business_card(confirmed_card, source="名刺OCR")
+                            row_num = append_business_card(
+                                confirmed_card, source="名刺OCR", image_url=image_url
+                            )
                             st.session_state.submitted = True
                             st.rerun()
                         except FileNotFoundError as e:
@@ -271,6 +289,7 @@ with tab_manual:
                     except Exception as e:
                         st.error(f"書き込みエラー: {e}")
 
+
 # --------------------------------------------------------------------------- #
 # 登録完了（OCR・手動共通）
 # --------------------------------------------------------------------------- #
@@ -283,6 +302,7 @@ if st.session_state.submitted:
     st.session_state.submitted = False
     st.session_state.last_photo_id = None
     st.session_state.last_upload_id = None
+    st.session_state.image_bytes = None
     st.session_state.dup_cache = {}
     st.session_state.form_key += 1  # フォームキーを更新してフィールドをリセット
     st.rerun()
