@@ -158,7 +158,10 @@ def upload_to_drive(image_bytes: bytes, filename: str) -> str:
 
 
 def append_business_card(
-    card: BusinessCard, source: str = "名刺", image_url: str = ""
+    card: BusinessCard,
+    source: str = "名刺",
+    image_url: str = "",
+    interest: str = "",
 ) -> int:
     """
     BusinessCard をスプレッドシートに1行追記する。
@@ -183,7 +186,7 @@ def append_business_card(
         card.email,         # D: メールアドレス
         card.department,    # E: 部署
         card.phone,         # F: 電話番号
-        "",                 # G: 関心事項（Formのみ）
+        interest,           # G: 関心事項（コース選択）
         source,             # H: 取得元
         now,                # I: 登録日時
         "",                 # J: 企業規模（売上高）GAS

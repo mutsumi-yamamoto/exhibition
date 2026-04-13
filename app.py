@@ -15,6 +15,13 @@ import streamlit as st
 from gemini_ocr import extract_from_image, BusinessCard
 from sheets_writer import append_business_card, check_duplicate, upload_to_drive
 
+# コース選択肢
+COURSE_OPTIONS = [
+    "01. ヤフー元CEO小澤の事業相談",
+    "02. AIエージェント研修",
+    "03. システムリプレイス",
+]
+
 
 def _to_jpeg_bytes(img: Image.Image) -> bytes:
     """PIL Image を JPEG バイト列に変換（RGBA/Pモードは RGB に変換）。"""
@@ -184,6 +191,14 @@ if st.session_state.ocr_done and st.session_state.card is not None and not st.se
             department   = st.text_input("部署",             value=card.department)
             phone        = st.text_input("電話番号",         value=card.phone)
 
+        course = st.radio(
+            "コース *",
+            COURSE_OPTIONS,
+            index=None,
+            key=f"ocr_course_{fk}",
+            horizontal=False,
+        )
+
         if card.email:
             try:
                 if _check_duplicate_cached(card.email):
@@ -204,6 +219,8 @@ if st.session_state.ocr_done and st.session_state.card is not None and not st.se
                 missing.append("氏名")
             if not email.strip():
                 missing.append("メールアドレス")
+            if not course:
+                missing.append("コース")
 
             if missing:
                 st.error(f"必須項目が未入力です: {', '.join(missing)}")
@@ -227,7 +244,10 @@ if st.session_state.ocr_done and st.session_state.card is not None and not st.se
                 with st.spinner("Google Sheetsに書き込み中..."):
                     try:
                         row_num = append_business_card(
-                            confirmed_card, source="名刺OCR", image_url=image_url
+                            confirmed_card,
+                            source="名刺OCR",
+                            image_url=image_url,
+                            interest=course,
                         )
                         st.session_state.submitted = True
                         st.rerun()
@@ -260,6 +280,14 @@ with tab_manual:
             m_department   = st.text_input("部署",             key=f"m_dept_{fk}")
             m_phone        = st.text_input("電話番号",         key=f"m_phone_{fk}")
 
+        m_course = st.radio(
+            "コース *",
+            COURSE_OPTIONS,
+            index=None,
+            key=f"m_course_{fk}",
+            horizontal=False,
+        )
+
         submitted_manual = st.form_submit_button("✅ Google Sheetsに登録する", type="primary", use_container_width=True)
 
         if submitted_manual:
@@ -280,6 +308,8 @@ with tab_manual:
                 missing.append("氏名")
             if not m_email.strip():
                 missing.append("メールアドレス")
+            if not m_course:
+                missing.append("コース")
 
             if missing:
                 st.error(f"必須項目が未入力です: {', '.join(missing)}")
@@ -294,7 +324,9 @@ with tab_manual:
                 )
                 with st.spinner("Google Sheetsに書き込み中..."):
                     try:
-                        row_num = append_business_card(manual_card, source="手動入力")
+                        row_num = append_business_card(
+                            manual_card, source="手動入力", interest=m_course
+                        )
                         st.session_state.submitted = True
                         st.rerun()
                     except FileNotFoundError as e:
