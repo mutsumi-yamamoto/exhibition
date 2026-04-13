@@ -171,7 +171,7 @@ with tab_ocr:
             with col1:
                 company_name = st.text_input("企業名 *",         value=card.company_name)
                 full_name    = st.text_input("氏名 *",           value=card.full_name)
-                title        = st.text_input("役職 *",           value=card.title)
+                title        = st.text_input("役職",             value=card.title)
 
             with col2:
                 email        = st.text_input("メールアドレス *", value=card.email)
@@ -247,7 +247,7 @@ with tab_manual:
         with col1:
             m_company_name = st.text_input("企業名 *",         key=f"m_company_{fk}")
             m_full_name    = st.text_input("氏名 *",           key=f"m_fullname_{fk}")
-            m_title        = st.text_input("役職 *",           key=f"m_title_{fk}")
+            m_title        = st.text_input("役職",             key=f"m_title_{fk}")
 
         with col2:
             m_email        = st.text_input("メールアドレス *", key=f"m_email_{fk}")
