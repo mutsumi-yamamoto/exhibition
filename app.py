@@ -15,6 +15,15 @@ import streamlit as st
 from gemini_ocr import extract_from_image, BusinessCard
 from sheets_writer import append_business_card, check_duplicate, upload_to_drive
 
+
+def _to_jpeg_bytes(img: Image.Image) -> bytes:
+    """PIL Image を JPEG バイト列に変換（RGBA/Pモードは RGB に変換）。"""
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=90)
+    return buf.getvalue()
+
 # --------------------------------------------------------------------------- #
 # ページ設定
 # --------------------------------------------------------------------------- #
@@ -118,8 +127,8 @@ with tab_ocr:
                 st.session_state.last_upload_id = upload_key
                 st.session_state.last_photo_id = None
                 new_image = True
-                # Drive アップロード用にバイト列を保存
-                st.session_state.image_bytes = raw_bytes
+                # Drive アップロード用にバイト列を保存（必ず JPEG 形式で統一）
+                st.session_state.image_bytes = _to_jpeg_bytes(image)
 
     if image is not None:
         col_img, col_info = st.columns([1, 1])

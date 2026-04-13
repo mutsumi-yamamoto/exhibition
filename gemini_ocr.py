@@ -90,6 +90,9 @@ def extract_from_image(image: Image.Image) -> BusinessCard:
     if max(w, h) > 1024:
         ratio = 1024 / max(w, h)
         image = image.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
+    # JPEG は透過を扱えないため RGB に変換（PNG の RGBA/P モード対応）
+    if image.mode != "RGB":
+        image = image.convert("RGB")
     buf = io.BytesIO()
     image.save(buf, format="JPEG", quality=85)
     image_bytes = buf.getvalue()
