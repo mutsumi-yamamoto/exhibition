@@ -177,7 +177,7 @@ def append_business_card(
     client = _get_client()
     worksheet = _get_or_create_sheet(client)
 
-    now = datetime.now(JST).strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now(JST).strftime("%Y/%m/%d %H:%M:%S")
 
     row = [
         card.company_name,  # A: 企業名
