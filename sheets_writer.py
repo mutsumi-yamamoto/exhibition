@@ -203,6 +203,26 @@ def append_business_card(
     return len(worksheet.get_all_values())
 
 
+def count_unique_companies() -> int:
+    """
+    シートに登録済みのユニーク企業数をカウントする。
+    空欄の企業名は除外。
+    """
+    client = _get_client()
+    worksheet = _get_or_create_sheet(client)
+
+    all_values = worksheet.get_all_values()
+    company_col_index = HEADERS.index("企業名")
+
+    companies = set()
+    for row in all_values[1:]:  # ヘッダー行をスキップ
+        if len(row) > company_col_index:
+            name = row[company_col_index].strip()
+            if name:
+                companies.add(name)
+    return len(companies)
+
+
 def check_duplicate(email: str) -> bool:
     """
     同一メールアドレスがシートに既に存在するか確認する。
