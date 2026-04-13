@@ -73,167 +73,173 @@ def _check_duplicate_cached(email: str) -> bool:
 fk = st.session_state.form_key
 
 # --------------------------------------------------------------------------- #
-# メインタブ
+# メインタブ（フラット構造）
 # --------------------------------------------------------------------------- #
 
-tab_ocr, tab_manual = st.tabs(["📷 名刺OCR", "✏️ 手動入力"])
+tab_camera, tab_upload, tab_manual = st.tabs(
+    ["📷 カメラで撮影", "📁 ファイルから読取", "✏️ 手動入力"]
+)
+
+image = None
+image_caption = ""
+new_image = False
+
+
+def _run_ocr(img: Image.Image) -> None:
+    """画像に対してOCRを実行しセッションに結果を保存。"""
+    st.session_state.ocr_done = False
+    st.session_state.submitted = False
+    with st.spinner("Gemini APIで名刺を解析中..."):
+        try:
+            card = extract_from_image(img)
+            st.session_state.card = card
+            st.session_state.ocr_done = True
+            st.success("抽出が完了しました。内容を確認・修正してください。")
+        except ValueError as e:
+            st.error(f"エラー: {e}")
+        except Exception as e:
+            st.error(f"予期しないエラーが発生しました: {e}")
+
 
 # =========================================================================== #
-# タブ1: 名刺OCR
+# タブ1: カメラで撮影
 # =========================================================================== #
 
-with tab_ocr:
+with tab_camera:
+    st.caption("外カメラを使う場合は、カメラ画面内の切替ボタン（↺）をタップしてください。")
+    camera_photo = st.camera_input("名刺をカメラで撮影してください", key=f"camera_{fk}")
+    if camera_photo is not None:
+        image = Image.open(camera_photo)
+        image_caption = "撮影した名刺"
+        if st.session_state.last_photo_id != id(camera_photo):
+            st.session_state.last_photo_id = id(camera_photo)
+            st.session_state.last_upload_id = None
+            new_image = True
+            # Drive アップロード用にバイト列を保存
+            camera_photo.seek(0)
+            st.session_state.image_bytes = camera_photo.read()
 
-    # ----------------------------------------------------------------------- #
-    # Step 1: 画像取得（カメラ or アップロード）
-    # ----------------------------------------------------------------------- #
-
-    st.markdown("### Step 1 — 名刺画像を取得")
-
-    cam_tab, upload_tab = st.tabs(["📷 カメラで撮影", "📁 ファイルをアップロード"])
-
-    image = None
-    image_caption = ""
-    new_image = False
-
-    with cam_tab:
-        st.caption("外カメラを使う場合は、カメラ画面内の切替ボタン（↺）をタップしてください。")
-        camera_photo = st.camera_input("名刺をカメラで撮影してください", key=f"camera_{fk}")
-        if camera_photo is not None:
-            image = Image.open(camera_photo)
-            image_caption = "撮影した名刺"
-            if st.session_state.last_photo_id != id(camera_photo):
-                st.session_state.last_photo_id = id(camera_photo)
-                st.session_state.last_upload_id = None
-                new_image = True
-                # Drive アップロード用にバイト列を保存
-                camera_photo.seek(0)
-                st.session_state.image_bytes = camera_photo.read()
-
-    with upload_tab:
-        st.caption("スマホでは「写真を撮る」を選ぶと全画面カメラで撮影できます。")
-        uploaded_file = st.file_uploader(
-            "名刺の画像ファイルを選択してください（JPG / PNG / WEBP）",
-            type=["jpg", "jpeg", "png", "webp"],
-            help="鮮明に撮影された名刺画像ほど精度が上がります。",
-            key=f"uploader_{fk}",
-        )
-        if uploaded_file is not None:
-            raw_bytes = uploaded_file.read()
-            image = Image.open(io.BytesIO(raw_bytes))
-            image_caption = uploaded_file.name
-            upload_key = f"{uploaded_file.name}_{uploaded_file.size}"
-            if st.session_state.last_upload_id != upload_key:
-                st.session_state.last_upload_id = upload_key
-                st.session_state.last_photo_id = None
-                new_image = True
-                # Drive アップロード用にバイト列を保存（必ず JPEG 形式で統一）
-                st.session_state.image_bytes = _to_jpeg_bytes(image)
-
-    if image is not None:
         col_img, col_info = st.columns([1, 1])
         with col_img:
             st.image(image, caption=image_caption, use_container_width=True)
         with col_info:
             st.info(f"**サイズ**: {image.size[0]} × {image.size[1]} px")
 
-        # ------------------------------------------------------------------- #
-        # Step 2: 新しい画像の場合のみ自動OCR
-        # ------------------------------------------------------------------- #
-
         if new_image:
-            st.session_state.ocr_done = False
-            st.session_state.submitted = False
-            with st.spinner("Gemini APIで名刺を解析中..."):
-                try:
-                    card = extract_from_image(image)
-                    st.session_state.card = card
-                    st.session_state.ocr_done = True
-                    st.success("抽出が完了しました。内容を確認・修正してください。")
-                except ValueError as e:
-                    st.error(f"エラー: {e}")
-                except Exception as e:
-                    st.error(f"予期しないエラーが発生しました: {e}")
-
-    # ----------------------------------------------------------------------- #
-    # Step 3: 確認・修正フォーム
-    # ----------------------------------------------------------------------- #
-
-    if st.session_state.ocr_done and st.session_state.card is not None and not st.session_state.submitted:
-        card = st.session_state.card
-
-        st.markdown("### Step 3 — 内容を確認・修正")
-        st.caption("OCR結果を確認し、誤りがあれば修正してから登録してください。")
-
-        with st.form(f"ocr_confirm_form_{fk}"):
-            col1, col2 = st.columns(2)
-
-            with col1:
-                company_name = st.text_input("企業名 *",         value=card.company_name)
-                full_name    = st.text_input("氏名 *",           value=card.full_name)
-                title        = st.text_input("役職",             value=card.title)
-
-            with col2:
-                email        = st.text_input("メールアドレス *", value=card.email)
-                department   = st.text_input("部署",             value=card.department)
-                phone        = st.text_input("電話番号",         value=card.phone)
-
-            if card.email:
-                try:
-                    if _check_duplicate_cached(card.email):
-                        st.warning(
-                            f"⚠️ このメールアドレス（{card.email}）は既に登録されています。"
-                            "重複登録に注意してください。"
-                        )
-                except Exception:
-                    pass
-
-            submitted = st.form_submit_button("✅ Google Sheetsに登録する", type="primary", use_container_width=True)
-
-            if submitted:
-                missing = []
-                if not company_name.strip():
-                    missing.append("企業名")
-                if not full_name.strip():
-                    missing.append("氏名")
-                if not email.strip():
-                    missing.append("メールアドレス")
-
-                if missing:
-                    st.error(f"必須項目が未入力です: {', '.join(missing)}")
-                else:
-                    confirmed_card = BusinessCard(
-                        company_name=company_name.strip(),
-                        department=department.strip(),
-                        title=title.strip(),
-                        full_name=full_name.strip(),
-                        email=email.strip(),
-                        phone=phone.strip(),
-                    )
-                    with st.spinner("Google Drive に画像をアップロード中..."):
-                        image_url = ""
-                        if st.session_state.image_bytes:
-                            try:
-                                fname = f"{full_name.strip()}_{company_name.strip()}.jpg"
-                                image_url = upload_to_drive(st.session_state.image_bytes, fname)
-                            except Exception as e:
-                                st.warning(f"画像アップロードをスキップしました: {e}")
-                    with st.spinner("Google Sheetsに書き込み中..."):
-                        try:
-                            row_num = append_business_card(
-                                confirmed_card, source="名刺OCR", image_url=image_url
-                            )
-                            st.session_state.submitted = True
-                            st.rerun()
-                        except FileNotFoundError as e:
-                            st.error(f"認証エラー: {e}")
-                        except ValueError as e:
-                            st.error(f"設定エラー: {e}")
-                        except Exception as e:
-                            st.error(f"書き込みエラー: {e}")
+            _run_ocr(image)
 
 # =========================================================================== #
-# タブ2: 手動入力
+# タブ2: ファイルから読取
+# =========================================================================== #
+
+with tab_upload:
+    st.caption("スマホでは「写真を撮る」を選ぶと全画面カメラで撮影できます。")
+    uploaded_file = st.file_uploader(
+        "名刺の画像ファイルを選択してください（JPG / PNG / WEBP）",
+        type=["jpg", "jpeg", "png", "webp"],
+        help="鮮明に撮影された名刺画像ほど精度が上がります。",
+        key=f"uploader_{fk}",
+    )
+    if uploaded_file is not None:
+        raw_bytes = uploaded_file.read()
+        image = Image.open(io.BytesIO(raw_bytes))
+        image_caption = uploaded_file.name
+        upload_key = f"{uploaded_file.name}_{uploaded_file.size}"
+        if st.session_state.last_upload_id != upload_key:
+            st.session_state.last_upload_id = upload_key
+            st.session_state.last_photo_id = None
+            new_image = True
+            # Drive アップロード用にバイト列を保存（必ず JPEG 形式で統一）
+            st.session_state.image_bytes = _to_jpeg_bytes(image)
+
+        col_img, col_info = st.columns([1, 1])
+        with col_img:
+            st.image(image, caption=image_caption, use_container_width=True)
+        with col_info:
+            st.info(f"**サイズ**: {image.size[0]} × {image.size[1]} px")
+
+        if new_image:
+            _run_ocr(image)
+
+# --------------------------------------------------------------------------- #
+# OCR結果の確認・修正フォーム（カメラ・ファイル両タブ共通）
+# --------------------------------------------------------------------------- #
+
+if st.session_state.ocr_done and st.session_state.card is not None and not st.session_state.submitted:
+    card = st.session_state.card
+
+    st.markdown("### 内容を確認・修正")
+    st.caption("OCR結果を確認し、誤りがあれば修正してから登録してください。")
+
+    with st.form(f"ocr_confirm_form_{fk}"):
+        col1, col2 = st.columns(2)
+
+        with col1:
+            company_name = st.text_input("企業名 *",         value=card.company_name)
+            full_name    = st.text_input("氏名 *",           value=card.full_name)
+            title        = st.text_input("役職",             value=card.title)
+
+        with col2:
+            email        = st.text_input("メールアドレス *", value=card.email)
+            department   = st.text_input("部署",             value=card.department)
+            phone        = st.text_input("電話番号",         value=card.phone)
+
+        if card.email:
+            try:
+                if _check_duplicate_cached(card.email):
+                    st.warning(
+                        f"⚠️ このメールアドレス（{card.email}）は既に登録されています。"
+                        "重複登録に注意してください。"
+                    )
+            except Exception:
+                pass
+
+        submitted = st.form_submit_button("✅ Google Sheetsに登録する", type="primary", use_container_width=True)
+
+        if submitted:
+            missing = []
+            if not company_name.strip():
+                missing.append("企業名")
+            if not full_name.strip():
+                missing.append("氏名")
+            if not email.strip():
+                missing.append("メールアドレス")
+
+            if missing:
+                st.error(f"必須項目が未入力です: {', '.join(missing)}")
+            else:
+                confirmed_card = BusinessCard(
+                    company_name=company_name.strip(),
+                    department=department.strip(),
+                    title=title.strip(),
+                    full_name=full_name.strip(),
+                    email=email.strip(),
+                    phone=phone.strip(),
+                )
+                with st.spinner("Google Drive に画像をアップロード中..."):
+                    image_url = ""
+                    if st.session_state.image_bytes:
+                        try:
+                            fname = f"{full_name.strip()}_{company_name.strip()}.jpg"
+                            image_url = upload_to_drive(st.session_state.image_bytes, fname)
+                        except Exception as e:
+                            st.warning(f"画像アップロードをスキップしました: {e}")
+                with st.spinner("Google Sheetsに書き込み中..."):
+                    try:
+                        row_num = append_business_card(
+                            confirmed_card, source="名刺OCR", image_url=image_url
+                        )
+                        st.session_state.submitted = True
+                        st.rerun()
+                    except FileNotFoundError as e:
+                        st.error(f"認証エラー: {e}")
+                    except ValueError as e:
+                        st.error(f"設定エラー: {e}")
+                    except Exception as e:
+                        st.error(f"書き込みエラー: {e}")
+
+# =========================================================================== #
+# タブ3: 手動入力
 # =========================================================================== #
 
 with tab_manual:
