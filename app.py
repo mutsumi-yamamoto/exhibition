@@ -13,12 +13,7 @@ from PIL import Image
 import streamlit as st
 
 from gemini_ocr import extract_from_image, BusinessCard
-from sheets_writer import (
-    append_business_card,
-    check_duplicate,
-    upload_to_drive,
-    count_unique_companies,
-)
+from sheets_writer import append_business_card, check_duplicate, upload_to_drive
 
 
 def _to_jpeg_bytes(img: Image.Image) -> bytes:
@@ -39,20 +34,7 @@ st.set_page_config(
     layout="centered",
 )
 
-# タイトルと企業カウントを横並びで表示
-_col_title, _col_count = st.columns([3, 1])
-with _col_title:
-    st.title("📇 クライアント登録システム")
-with _col_count:
-    try:
-        # form_key をキャッシュキーとし、登録成功時の form_key 更新で自動再取得
-        cache_key = st.session_state.form_key
-        if st.session_state.get("company_count_key") != cache_key:
-            st.session_state.company_count = count_unique_companies()
-            st.session_state.company_count_key = cache_key
-        st.metric("登録済企業数", st.session_state.company_count)
-    except Exception:
-        st.metric("登録済企業数", "—")
+st.title("📇 クライアント登録システム")
 
 
 # --------------------------------------------------------------------------- #
