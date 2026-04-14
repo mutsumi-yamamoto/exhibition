@@ -207,13 +207,14 @@ def append_business_card(
         image_url,          # U: 名刺画像URL
     ]
 
-    # A列の最初の空行を探して書き込む
-    col_a = worksheet.col_values(1)
-    next_row = len(col_a) + 1
-    for i, val in enumerate(col_a):
+    # A列の最初の空行を探して書き込む（U,V列等に値があっても無視）
+    total_rows = worksheet.row_count
+    col_a = worksheet.get(f"A1:A{total_rows}")
+    next_row = total_rows + 1
+    for i, cell in enumerate(col_a):
         if i == 0:
             continue  # ヘッダーをスキップ
-        if val == "" or val is None:
+        if not cell or cell[0] == "":
             next_row = i + 1
             break
 
