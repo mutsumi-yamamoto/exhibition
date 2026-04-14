@@ -7,6 +7,7 @@ app.py
 """
 
 import io
+import os
 import time
 from typing import Optional
 from PIL import Image
@@ -14,7 +15,14 @@ import fitz  # PyMuPDF
 import streamlit as st
 
 from gemini_ocr import extract_from_image, BusinessCard
-from sheets_writer import append_business_card, check_duplicate, upload_to_drive
+from sheets_writer import (
+    append_business_card,
+    check_duplicate,
+    upload_to_drive,
+    list_drive_subfolders,
+    list_drive_images,
+    download_drive_file,
+)
 
 # コース選択肢
 COURSE_OPTIONS = [
@@ -22,6 +30,19 @@ COURSE_OPTIONS = [
     "02. AIエージェント研修",
     "03. システムリプレイス",
 ]
+
+# フォルダ名先頭2文字 → コースのマッピング
+_FOLDER_COURSE_MAP = {
+    "01": COURSE_OPTIONS[0],
+    "02": COURSE_OPTIONS[1],
+    "03": COURSE_OPTIONS[2],
+}
+
+
+def _folder_to_course(folder_name: str) -> Optional[str]:
+    """フォルダ名の先頭2文字からコースを自動判定する。"""
+    prefix = folder_name[:2]
+    return _FOLDER_COURSE_MAP.get(prefix)
 
 
 def _pdf_to_images(pdf_bytes: bytes) -> list[Image.Image]:
@@ -83,6 +104,10 @@ if "multi_idx" not in st.session_state:
     st.session_state.multi_idx = 0
 if "multi_upload_key" not in st.session_state:
     st.session_state.multi_upload_key = None
+if "drive_subfolders" not in st.session_state:
+    st.session_state.drive_subfolders: list = []
+if "drive_course" not in st.session_state:
+    st.session_state.drive_course: str | None = None
 
 
 def _check_duplicate_cached(email: str) -> bool:
@@ -102,8 +127,8 @@ fk = st.session_state.form_key
 # メインタブ（フラット構造）
 # --------------------------------------------------------------------------- #
 
-tab_camera, tab_upload, tab_manual = st.tabs(
-    ["📷 カメラで撮影", "📁 ファイルから読取", "✏️ 手動入力"]
+tab_camera, tab_upload, tab_drive, tab_manual = st.tabs(
+    ["📷 カメラで撮影", "📁 ファイルから読取", "☁️ Driveから読取", "✏️ 手動入力"]
 )
 
 image = None
@@ -224,6 +249,120 @@ with tab_upload:
             if not st.session_state.ocr_done:
                 _run_ocr(page_images)
 
+# =========================================================================== #
+# タブ3: Driveから読取
+# =========================================================================== #
+
+with tab_drive:
+    st.caption("Google Driveのコース別フォルダから名刺画像を読み取ります。")
+
+    _drive_folder_id = (
+        os.getenv("DRIVE_SOURCE_FOLDER_ID")
+        or st.secrets.get("DRIVE_SOURCE_FOLDER_ID", "")
+        or os.getenv("DRIVE_FOLDER_ID")
+        or st.secrets.get("DRIVE_FOLDER_ID", "")
+    )
+
+    if not _drive_folder_id:
+        st.warning("DRIVE_FOLDER_ID が設定されていません。.env または secrets.toml に設定してください。")
+    else:
+        if st.button("📂 フォルダ一覧を取得", key="drive_fetch"):
+            with st.spinner("Drive フォルダを取得中..."):
+                try:
+                    subfolders = list_drive_subfolders(_drive_folder_id)
+                    st.session_state.drive_subfolders = subfolders
+                    if not subfolders:
+                        st.info("サブフォルダが見つかりませんでした。")
+                except Exception as e:
+                    st.error(f"フォルダ取得エラー: {e}")
+
+        if st.session_state.drive_subfolders:
+            folder_options = {f["name"]: f for f in st.session_state.drive_subfolders}
+            selected_names = st.multiselect(
+                "読み取るフォルダを選択してください",
+                options=list(folder_options.keys()),
+                default=list(folder_options.keys()),
+                key="drive_folder_select",
+            )
+
+            if st.button("🚀 読取開始", key="drive_start", disabled=not selected_names):
+                queue = []
+                total_files = 0
+                progress_bar = st.progress(0, text="フォルダを読み込み中...")
+                for i, name in enumerate(selected_names):
+                    folder = folder_options[name]
+                    course = _folder_to_course(folder["name"])
+                    try:
+                        files = list_drive_images(folder["id"])
+                    except Exception as e:
+                        st.warning(f"⚠️ {folder['name']} の読み込みをスキップ: {e}")
+                        continue
+                    for f in files:
+                        progress_bar.progress(
+                            (i + 1) / len(selected_names),
+                            text=f"ダウンロード中: {folder['name']} / {f['name']}",
+                        )
+                        try:
+                            raw = download_drive_file(f["id"])
+                        except Exception as e:
+                            st.warning(f"⚠️ {f['name']} のダウンロードをスキップ: {e}")
+                            continue
+
+                        if f["mimeType"] == "application/pdf":
+                            imgs = _pdf_to_images(raw)
+                        else:
+                            imgs = [Image.open(io.BytesIO(raw))]
+
+                        queue.append({
+                            "images": imgs,
+                            "image": imgs[0],
+                            "image_bytes": _to_jpeg_bytes(imgs[0]),
+                            "filename": f["name"],
+                            "course": course,
+                        })
+                        total_files += 1
+
+                progress_bar.empty()
+                if queue:
+                    st.session_state.multi_images = queue
+                    st.session_state.multi_idx = 0
+                    st.session_state.ocr_done = False
+                    st.session_state.card = None
+                    st.session_state.drive_course = queue[0].get("course")
+                    st.success(f"📥 {total_files} 件のファイルを読み込みました。")
+                    st.rerun()
+                else:
+                    st.info("対象ファイルが見つかりませんでした。")
+
+        # Drive経由のキュー処理（ファイルアップロードと同様にプレビュー・OCR）
+        queue = st.session_state.multi_images
+        idx = st.session_state.multi_idx
+        if queue and idx < len(queue) and queue[idx].get("course") is not None:
+            current = queue[idx]
+            st.session_state.image_bytes = current["image_bytes"]
+            st.session_state.drive_course = current.get("course")
+
+            if len(queue) > 1:
+                st.info(f"📄 **{idx + 1} / {len(queue)} 枚目**: {current['filename']}")
+
+            page_images = current["images"]
+            if len(page_images) > 1:
+                cols = st.columns(len(page_images))
+                for i, pg_img in enumerate(page_images):
+                    with cols[i]:
+                        label = "表面" if i == 0 else "裏面" if i == 1 else f"{i+1}ページ"
+                        st.image(pg_img, caption=label, use_container_width=True)
+                st.caption(f"📖 {len(page_images)}ページの情報を統合して読み取ります")
+            else:
+                col_img, col_info = st.columns([1, 1])
+                with col_img:
+                    st.image(current["image"], caption=current["filename"], use_container_width=True)
+                with col_info:
+                    st.info(f"**サイズ**: {current['image'].size[0]} × {current['image'].size[1]} px")
+
+            if not st.session_state.ocr_done:
+                _run_ocr(page_images)
+
 # --------------------------------------------------------------------------- #
 # OCR結果の確認・修正フォーム（カメラ・ファイル両タブ共通）
 # --------------------------------------------------------------------------- #
@@ -247,10 +386,16 @@ if st.session_state.ocr_done and st.session_state.card is not None and not st.se
             department   = st.text_input("部署",             value=card.department)
             phone        = st.text_input("電話番号",         value=card.phone)
 
+        # Driveフォルダからのコース自動判定
+        _auto_course = st.session_state.get("drive_course")
+        _course_idx = None
+        if _auto_course and _auto_course in COURSE_OPTIONS:
+            _course_idx = COURSE_OPTIONS.index(_auto_course)
+
         course = st.radio(
             "コース",
             COURSE_OPTIONS,
-            index=None,
+            index=_course_idx,
             key=f"ocr_course_{fk}",
             horizontal=False,
         )
@@ -311,6 +456,9 @@ if st.session_state.ocr_done and st.session_state.card is not None and not st.se
                             st.session_state.ocr_done = False
                             st.session_state.card = None
                             st.session_state.image_bytes = None
+                            # 次のアイテムのコース自動設定（Drive経由の場合）
+                            next_item = queue[idx + 1]
+                            st.session_state.drive_course = next_item.get("course")
                             st.toast(f"✅ {idx + 1}/{len(queue)} 枚目を登録しました。次へ進みます...")
                             st.rerun()
                         else:
@@ -416,6 +564,8 @@ if st.session_state.submitted:
     st.session_state.multi_images = []
     st.session_state.multi_idx = 0
     st.session_state.multi_upload_key = None
+    st.session_state.drive_subfolders = []
+    st.session_state.drive_course = None
     st.session_state.dup_cache = {}
     st.session_state.form_key += 1  # フォームキーを更新してフィールドをリセット
     st.rerun()

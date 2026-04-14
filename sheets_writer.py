@@ -15,7 +15,7 @@ JST = timezone(timedelta(hours=9))
 import streamlit as st
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
+from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
 from dotenv import load_dotenv
 
 from gemini_ocr import BusinessCard
@@ -127,9 +127,14 @@ def upload_to_drive(image_bytes: bytes, filename: str) -> str:
     Raises:
         ValueError: DRIVE_FOLDER_ID 未設定時
     """
-    folder_id = os.getenv("DRIVE_FOLDER_ID") or st.secrets.get("DRIVE_FOLDER_ID")
+    folder_id = (
+        os.getenv("DRIVE_UPLOAD_FOLDER_ID")
+        or st.secrets.get("DRIVE_UPLOAD_FOLDER_ID")
+        or os.getenv("DRIVE_FOLDER_ID")
+        or st.secrets.get("DRIVE_FOLDER_ID")
+    )
     if not folder_id:
-        raise ValueError("DRIVE_FOLDER_ID が設定されていません。")
+        raise ValueError("DRIVE_UPLOAD_FOLDER_ID（または DRIVE_FOLDER_ID）が設定されていません。")
 
     service = _get_drive_service()
 
@@ -207,6 +212,60 @@ def append_business_card(
 
     # 追記後の最終行番号を返す
     return len(worksheet.get_all_values())
+
+
+def list_drive_subfolders(parent_folder_id: str) -> list[dict]:
+    """
+    親フォルダ直下のサブフォルダ一覧を取得する（共有ドライブ対応）。
+
+    Returns:
+        [{"id": "...", "name": "01_事業相談"}, ...]
+    """
+    service = _get_drive_service()
+    results = service.files().list(
+        q=f"'{parent_folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",
+        fields="files(id, name)",
+        orderBy="name",
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True,
+    ).execute()
+    return results.get("files", [])
+
+
+def list_drive_images(folder_id: str) -> list[dict]:
+    """
+    指定フォルダ内の画像・PDFファイル一覧を取得する。
+
+    Returns:
+        [{"id": "...", "name": "名刺01.jpg", "mimeType": "image/jpeg"}, ...]
+    """
+    service = _get_drive_service()
+    mime_filter = " or ".join(
+        f"mimeType='{m}'"
+        for m in ["image/jpeg", "image/png", "image/webp", "application/pdf"]
+    )
+    results = service.files().list(
+        q=f"'{folder_id}' in parents and ({mime_filter}) and trashed=false",
+        fields="files(id, name, mimeType)",
+        orderBy="name",
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True,
+    ).execute()
+    return results.get("files", [])
+
+
+def download_drive_file(file_id: str) -> bytes:
+    """
+    Drive上のファイルをバイト列としてダウンロードする（共有ドライブ対応）。
+    """
+    service = _get_drive_service()
+    request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
+    buf = io.BytesIO()
+    downloader = MediaIoBaseDownload(buf, request)
+    done = False
+    while not done:
+        _, done = downloader.next_chunk()
+    return buf.getvalue()
 
 
 def check_duplicate(email: str) -> bool:
