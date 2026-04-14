@@ -244,14 +244,23 @@ def list_drive_images(folder_id: str) -> list[dict]:
         f"mimeType='{m}'"
         for m in ["image/jpeg", "image/png", "image/webp", "application/pdf"]
     )
-    results = service.files().list(
-        q=f"'{folder_id}' in parents and ({mime_filter}) and trashed=false",
-        fields="files(id, name, mimeType)",
-        orderBy="name",
-        supportsAllDrives=True,
-        includeItemsFromAllDrives=True,
-    ).execute()
-    return results.get("files", [])
+    all_files = []
+    page_token = None
+    while True:
+        results = service.files().list(
+            q=f"'{folder_id}' in parents and ({mime_filter}) and trashed=false",
+            fields="nextPageToken, files(id, name, mimeType)",
+            orderBy="name",
+            pageSize=100,
+            pageToken=page_token,
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        ).execute()
+        all_files.extend(results.get("files", []))
+        page_token = results.get("nextPageToken")
+        if not page_token:
+            break
+    return all_files
 
 
 def download_drive_file(file_id: str) -> bytes:
