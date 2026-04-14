@@ -76,6 +76,12 @@ if "form_key" not in st.session_state:
     st.session_state.form_key = 0
 if "image_bytes" not in st.session_state:
     st.session_state.image_bytes: Optional[bytes] = None
+if "multi_images" not in st.session_state:
+    st.session_state.multi_images: list = []
+if "multi_idx" not in st.session_state:
+    st.session_state.multi_idx = 0
+if "multi_upload_key" not in st.session_state:
+    st.session_state.multi_upload_key = None
 
 
 def _check_duplicate_cached(email: str) -> bool:
@@ -152,37 +158,59 @@ with tab_camera:
 # =========================================================================== #
 
 with tab_upload:
-    st.caption("スマホでは「写真を撮る」を選ぶと全画面カメラで撮影できます。")
-    uploaded_file = st.file_uploader(
+    st.caption("複数ファイルを同時に選択できます。1枚ずつ確認・登録します。")
+    uploaded_files = st.file_uploader(
         "名刺の画像ファイルを選択してください（JPG / PNG / WEBP / PDF）",
         type=["jpg", "jpeg", "png", "webp", "pdf"],
+        accept_multiple_files=True,
         help="鮮明に撮影された名刺画像ほど精度が上がります。PDFは1ページ目を読み取ります。",
         key=f"uploader_{fk}",
     )
-    if uploaded_file is not None:
-        raw_bytes = uploaded_file.read()
-        # PDF の場合は画像に変換
-        if uploaded_file.name.lower().endswith(".pdf"):
-            image = _pdf_to_image(raw_bytes)
-        else:
-            image = Image.open(io.BytesIO(raw_bytes))
-        image_caption = uploaded_file.name
-        upload_key = f"{uploaded_file.name}_{uploaded_file.size}"
-        if st.session_state.last_upload_id != upload_key:
-            st.session_state.last_upload_id = upload_key
+    if uploaded_files:
+        # 新しいファイル群かどうかを判定
+        upload_key = "_".join(f"{f.name}_{f.size}" for f in uploaded_files)
+        if st.session_state.multi_upload_key != upload_key:
+            st.session_state.multi_upload_key = upload_key
             st.session_state.last_photo_id = None
-            new_image = True
-            # Drive アップロード用にバイト列を保存（必ず JPEG 形式で統一）
-            st.session_state.image_bytes = _to_jpeg_bytes(image)
+            # 全ファイルを画像に変換してキューに格納
+            queue = []
+            for f in uploaded_files:
+                raw = f.read()
+                if f.name.lower().endswith(".pdf"):
+                    img = _pdf_to_image(raw)
+                else:
+                    img = Image.open(io.BytesIO(raw))
+                queue.append({
+                    "image": img,
+                    "image_bytes": _to_jpeg_bytes(img),
+                    "filename": f.name,
+                })
+            st.session_state.multi_images = queue
+            st.session_state.multi_idx = 0
+            st.session_state.ocr_done = False
+            st.session_state.card = None
 
-        col_img, col_info = st.columns([1, 1])
-        with col_img:
-            st.image(image, caption=image_caption, use_container_width=True)
-        with col_info:
-            st.info(f"**サイズ**: {image.size[0]} × {image.size[1]} px")
+        # 現在のキューからアイテムを表示
+        queue = st.session_state.multi_images
+        idx = st.session_state.multi_idx
 
-        if new_image:
-            _run_ocr(image)
+        if queue and idx < len(queue):
+            current = queue[idx]
+            image = current["image"]
+            st.session_state.image_bytes = current["image_bytes"]
+
+            if len(queue) > 1:
+                st.info(f"📄 **{idx + 1} / {len(queue)} 枚目**: {current['filename']}")
+
+            col_img, col_info = st.columns([1, 1])
+            with col_img:
+                st.image(image, caption=current["filename"], use_container_width=True)
+            with col_info:
+                st.info(f"**サイズ**: {image.size[0]} × {image.size[1]} px")
+
+            # 現在の画像に対してOCR未実行なら実行
+            if not st.session_state.ocr_done:
+                _run_ocr(image)
 
 # --------------------------------------------------------------------------- #
 # OCR結果の確認・修正フォーム（カメラ・ファイル両タブ共通）
@@ -263,8 +291,19 @@ if st.session_state.ocr_done and st.session_state.card is not None and not st.se
                             image_url=image_url,
                             interest=course or "",
                         )
-                        st.session_state.submitted = True
-                        st.rerun()
+                        # 複数ファイルキューに次があれば進む
+                        queue = st.session_state.get("multi_images", [])
+                        idx = st.session_state.get("multi_idx", 0)
+                        if queue and idx + 1 < len(queue):
+                            st.session_state.multi_idx += 1
+                            st.session_state.ocr_done = False
+                            st.session_state.card = None
+                            st.session_state.image_bytes = None
+                            st.toast(f"✅ {idx + 1}/{len(queue)} 枚目を登録しました。次へ進みます...")
+                            st.rerun()
+                        else:
+                            st.session_state.submitted = True
+                            st.rerun()
                     except FileNotFoundError as e:
                         st.error(f"認証エラー: {e}")
                     except ValueError as e:
@@ -362,6 +401,9 @@ if st.session_state.submitted:
     st.session_state.last_photo_id = None
     st.session_state.last_upload_id = None
     st.session_state.image_bytes = None
+    st.session_state.multi_images = []
+    st.session_state.multi_idx = 0
+    st.session_state.multi_upload_key = None
     st.session_state.dup_cache = {}
     st.session_state.form_key += 1  # フォームキーを更新してフィールドをリセット
     st.rerun()
