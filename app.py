@@ -24,15 +24,16 @@ COURSE_OPTIONS = [
 ]
 
 
-def _pdf_to_image(pdf_bytes: bytes) -> Image.Image:
-    """PDFの1ページ目を PIL Image に変換する。"""
+def _pdf_to_images(pdf_bytes: bytes) -> list[Image.Image]:
+    """PDFの全ページを PIL Image のリストに変換する。"""
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    page = doc[0]
-    # 高解像度でレンダリング（2倍）
-    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+    images = []
+    for page in doc:
+        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        images.append(img)
     doc.close()
-    return img
+    return images
 
 
 def _to_jpeg_bytes(img: Image.Image) -> bytes:
@@ -110,13 +111,13 @@ image_caption = ""
 new_image = False
 
 
-def _run_ocr(img: Image.Image) -> None:
-    """画像に対してOCRを実行しセッションに結果を保存。"""
+def _run_ocr(images) -> None:
+    """画像（1枚 or 複数枚）に対してOCRを実行しセッションに結果を保存。"""
     st.session_state.ocr_done = False
     st.session_state.submitted = False
     with st.spinner("Gemini APIで名刺を解析中..."):
         try:
-            card = extract_from_image(img)
+            card = extract_from_image(images)
             st.session_state.card = card
             st.session_state.ocr_done = True
             st.success("抽出が完了しました。内容を確認・修正してください。")
@@ -177,12 +178,13 @@ with tab_upload:
             for f in uploaded_files:
                 raw = f.read()
                 if f.name.lower().endswith(".pdf"):
-                    img = _pdf_to_image(raw)
+                    imgs = _pdf_to_images(raw)
                 else:
-                    img = Image.open(io.BytesIO(raw))
+                    imgs = [Image.open(io.BytesIO(raw))]
                 queue.append({
-                    "image": img,
-                    "image_bytes": _to_jpeg_bytes(img),
+                    "images": imgs,              # OCR用（表裏など全ページ）
+                    "image": imgs[0],            # プレビュー用（1ページ目）
+                    "image_bytes": _to_jpeg_bytes(imgs[0]),  # Drive用
                     "filename": f.name,
                 })
             st.session_state.multi_images = queue
@@ -202,15 +204,25 @@ with tab_upload:
             if len(queue) > 1:
                 st.info(f"📄 **{idx + 1} / {len(queue)} 枚目**: {current['filename']}")
 
-            col_img, col_info = st.columns([1, 1])
-            with col_img:
-                st.image(image, caption=current["filename"], use_container_width=True)
-            with col_info:
-                st.info(f"**サイズ**: {image.size[0]} × {image.size[1]} px")
+            # PDFの表裏など複数ページがある場合は並べて表示
+            page_images = current["images"]
+            if len(page_images) > 1:
+                cols = st.columns(len(page_images))
+                for i, pg_img in enumerate(page_images):
+                    with cols[i]:
+                        label = "表面" if i == 0 else "裏面" if i == 1 else f"{i+1}ページ"
+                        st.image(pg_img, caption=label, use_container_width=True)
+                st.caption(f"📖 {len(page_images)}ページの情報を統合して読み取ります")
+            else:
+                col_img, col_info = st.columns([1, 1])
+                with col_img:
+                    st.image(image, caption=current["filename"], use_container_width=True)
+                with col_info:
+                    st.info(f"**サイズ**: {image.size[0]} × {image.size[1]} px")
 
-            # 現在の画像に対してOCR未実行なら実行
+            # 現在の画像に対してOCR未実行なら実行（全ページを渡す）
             if not st.session_state.ocr_done:
-                _run_ocr(image)
+                _run_ocr(page_images)
 
 # --------------------------------------------------------------------------- #
 # OCR結果の確認・修正フォーム（カメラ・ファイル両タブ共通）

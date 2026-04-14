@@ -38,7 +38,7 @@ class BusinessCard:
 # Gemini クライアント
 # --------------------------------------------------------------------------- #
 
-_PROMPT = """
+_PROMPT_SINGLE = """
 以下の名刺画像から情報を抽出し、必ずJSON形式のみで返してください。
 説明文や前置きは不要です。JSONのみを返してください。
 
@@ -63,13 +63,55 @@ _PROMPT = """
 読み取れない項目は空文字にしてください。JSONのみ返してください。
 """
 
+_PROMPT_MULTI = """
+以下は同一人物の名刺の表面と裏面の画像です。
+両面の情報を統合して、必ずJSON形式のみで返してください。
+説明文や前置きは不要です。JSONのみを返してください。
 
-def extract_from_image(image: Image.Image) -> BusinessCard:
+表面に氏名・企業名・役職、裏面にメールアドレス・電話番号・住所などが
+記載されている場合があります。両面から読み取れる情報をすべて統合してください。
+
+抽出するフィールド:
+- company_name: 企業名（法人格含む。例: 株式会社〇〇）
+- full_name: 氏名（フルネーム）
+- title: 役職名（例: 代表取締役、営業部長）
+- email: メールアドレス
+- department: 部署名（なければ空文字）
+- phone: 電話番号（最初の1件）
+
+出力例:
+{
+  "company_name": "株式会社サンプル",
+  "full_name": "山田 太郎",
+  "title": "部長",
+  "email": "yamada@sample.co.jp",
+  "department": "営業部",
+  "phone": "03-1234-5678"
+}
+
+読み取れない項目は空文字にしてください。JSONのみ返してください。
+"""
+
+
+def _prepare_image(image: Image.Image) -> bytes:
+    """PIL Image をリサイズ・RGB変換し JPEG bytes を返す。"""
+    w, h = image.size
+    if max(w, h) > 1024:
+        ratio = 1024 / max(w, h)
+        image = image.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
+    if image.mode != "RGB":
+        image = image.convert("RGB")
+    buf = io.BytesIO()
+    image.save(buf, format="JPEG", quality=85)
+    return buf.getvalue()
+
+
+def extract_from_image(images) -> BusinessCard:
     """
-    PIL Image を受け取り、Gemini で名刺情報を抽出して BusinessCard を返す。
+    PIL Image（1枚 or 複数枚）を受け取り、Gemini で名刺情報を抽出して BusinessCard を返す。
 
     Args:
-        image: アップロードされた名刺画像（PIL.Image）
+        images: PIL.Image（1枚）または list[PIL.Image]（表裏など複数枚）
 
     Returns:
         BusinessCard dataclass
@@ -77,6 +119,10 @@ def extract_from_image(image: Image.Image) -> BusinessCard:
     Raises:
         ValueError: APIキー未設定 or JSONパース失敗時
     """
+    # 単一画像をリストに正規化
+    if isinstance(images, Image.Image):
+        images = [images]
+
     try:
         import streamlit as st
         api_key = st.secrets.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
@@ -85,17 +131,14 @@ def extract_from_image(image: Image.Image) -> BusinessCard:
     if not api_key:
         raise ValueError("GEMINI_API_KEY が設定されていません（.streamlit/secrets.toml または .env を確認してください）。")
 
-    # PIL Image → リサイズ → JPEG bytes に変換（長辺1024px以下に縮小）
-    w, h = image.size
-    if max(w, h) > 1024:
-        ratio = 1024 / max(w, h)
-        image = image.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
-    # JPEG は透過を扱えないため RGB に変換（PNG の RGBA/P モード対応）
-    if image.mode != "RGB":
-        image = image.convert("RGB")
-    buf = io.BytesIO()
-    image.save(buf, format="JPEG", quality=85)
-    image_bytes = buf.getvalue()
+    # 各画像を JPEG bytes に変換
+    image_parts = [
+        types.Part.from_bytes(data=_prepare_image(img), mime_type="image/jpeg")
+        for img in images
+    ]
+
+    # 画像枚数に応じてプロンプトを選択
+    prompt = _PROMPT_MULTI if len(images) > 1 else _PROMPT_SINGLE
 
     client = genai.Client(api_key=api_key)
 
@@ -104,10 +147,7 @@ def extract_from_image(image: Image.Image) -> BusinessCard:
         try:
             response = client.models.generate_content(
                 model="gemini-2.5-flash",
-                contents=[
-                    _PROMPT,
-                    types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
-                ],
+                contents=[prompt] + image_parts,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
                     temperature=0.0,
