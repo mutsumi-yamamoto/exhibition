@@ -210,13 +210,17 @@ def append_business_card(
     # A列の最初の空行を探して書き込む（U,V列等に値があっても無視）
     total_rows = worksheet.row_count
     col_a = worksheet.get(f"A1:A{total_rows}")
-    next_row = total_rows + 1
+    next_row = None
     for i, cell in enumerate(col_a):
         if i == 0:
             continue  # ヘッダーをスキップ
         if not cell or cell[0] == "":
             next_row = i + 1
             break
+
+    # 空行が見つからなければデータの次の行に追加
+    if next_row is None:
+        next_row = len(col_a) + 1
 
     worksheet.update(
         f"A{next_row}",
