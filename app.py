@@ -10,6 +10,7 @@ import io
 import time
 from typing import Optional
 from PIL import Image
+import fitz  # PyMuPDF
 import streamlit as st
 
 from gemini_ocr import extract_from_image, BusinessCard
@@ -21,6 +22,17 @@ COURSE_OPTIONS = [
     "02. AIエージェント研修",
     "03. システムリプレイス",
 ]
+
+
+def _pdf_to_image(pdf_bytes: bytes) -> Image.Image:
+    """PDFの1ページ目を PIL Image に変換する。"""
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    page = doc[0]
+    # 高解像度でレンダリング（2倍）
+    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+    doc.close()
+    return img
 
 
 def _to_jpeg_bytes(img: Image.Image) -> bytes:
@@ -142,14 +154,18 @@ with tab_camera:
 with tab_upload:
     st.caption("スマホでは「写真を撮る」を選ぶと全画面カメラで撮影できます。")
     uploaded_file = st.file_uploader(
-        "名刺の画像ファイルを選択してください（JPG / PNG / WEBP）",
-        type=["jpg", "jpeg", "png", "webp"],
-        help="鮮明に撮影された名刺画像ほど精度が上がります。",
+        "名刺の画像ファイルを選択してください（JPG / PNG / WEBP / PDF）",
+        type=["jpg", "jpeg", "png", "webp", "pdf"],
+        help="鮮明に撮影された名刺画像ほど精度が上がります。PDFは1ページ目を読み取ります。",
         key=f"uploader_{fk}",
     )
     if uploaded_file is not None:
         raw_bytes = uploaded_file.read()
-        image = Image.open(io.BytesIO(raw_bytes))
+        # PDF の場合は画像に変換
+        if uploaded_file.name.lower().endswith(".pdf"):
+            image = _pdf_to_image(raw_bytes)
+        else:
+            image = Image.open(io.BytesIO(raw_bytes))
         image_caption = uploaded_file.name
         upload_key = f"{uploaded_file.name}_{uploaded_file.size}"
         if st.session_state.last_upload_id != upload_key:
