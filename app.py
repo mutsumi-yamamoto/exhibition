@@ -396,7 +396,7 @@ if st.session_state.ocr_done and st.session_state.card is not None and not st.se
             "コース",
             COURSE_OPTIONS,
             index=_course_idx,
-            key=f"ocr_course_{fk}",
+            key=f"ocr_course_{fk}_{st.session_state.multi_idx}",
             horizontal=False,
         )
 
