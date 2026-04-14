@@ -207,10 +207,23 @@ def append_business_card(
         image_url,          # U: 名刺画像URL
     ]
 
-    worksheet.append_row(row, value_input_option="USER_ENTERED")
+    # A列の最初の空行を探して書き込む
+    col_a = worksheet.col_values(1)
+    next_row = len(col_a) + 1
+    for i, val in enumerate(col_a):
+        if i == 0:
+            continue  # ヘッダーをスキップ
+        if val == "" or val is None:
+            next_row = i + 1
+            break
 
-    # 追記後の最終行番号を返す
-    return len(worksheet.get_all_values())
+    worksheet.update(
+        f"A{next_row}",
+        [row],
+        value_input_option="USER_ENTERED",
+    )
+
+    return next_row
 
 
 def list_drive_subfolders(parent_folder_id: str) -> list[dict]:
