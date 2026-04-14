@@ -152,12 +152,15 @@ def upload_to_drive(image_bytes: bytes, filename: str) -> str:
 
     file_id = uploaded["id"]
 
-    # 「リンクを知っている全員が閲覧可」に設定
-    service.permissions().create(
-        fileId=file_id,
-        body={"type": "anyone", "role": "reader"},
-        supportsAllDrives=True
-    ).execute()
+    # 「リンクを知っている全員が閲覧可」に設定（共有ドライブでは失敗する場合あり）
+    try:
+        service.permissions().create(
+            fileId=file_id,
+            body={"type": "anyone", "role": "reader"},
+            supportsAllDrives=True,
+        ).execute()
+    except Exception:
+        pass  # 共有ドライブの権限で閲覧可能なのでスキップ
 
     return f"https://drive.google.com/file/d/{file_id}/view"
 
