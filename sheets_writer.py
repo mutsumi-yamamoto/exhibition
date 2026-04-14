@@ -200,7 +200,6 @@ def append_business_card(
         "",                 # M: ランク GAS
         "",                 # N: ランク判定日時 GAS
         "",                 # O: 自社担当者名 手入力
-        "",                 # P: 自社担当者メール 手入力
         "FALSE",            # Q: 下書き作成済 GAS
         "",                 # R: 下書き作成日時 GAS
         "",                 # S: メール送信済 GAS
